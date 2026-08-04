@@ -18,9 +18,12 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install dependencies
+        run: npm install xlsx --no-save
+
       - name: Run fetch script
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: node sector-rotation-app/scripts/fetch-sector-data.mjs
+        run: node scripts/fetch-sector-data.mjs
