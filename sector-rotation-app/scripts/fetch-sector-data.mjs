@@ -11,7 +11,8 @@
 const SYMBOLS = ['XLC','XLY','XLP','XLE','XLF','XLV','XLI','XLB','XLRE','XLK','XLU','SPY'];
 const OUTPUT_SIZE = 90; // days of history to keep synced on every run
 
-const { TWELVE_DATA_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+const { TWELVE_DATA_API_KEY, SUPABASE_SERVICE_KEY } = process.env;
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 
 if (!TWELVE_DATA_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('Missing required env vars: TWELVE_DATA_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY');
@@ -60,8 +61,9 @@ async function main() {
     } catch (err) {
       console.error(`  ${symbol} failed: ${err.message}`);
     }
-    // small delay to be polite to the free-tier rate limit
-    await new Promise(r => setTimeout(r, 250));
+    // Free-tier Twelve Data is capped at 8 requests/minute — space calls
+    // out enough to stay under that (~8s gives a safety margin).
+    await new Promise(r => setTimeout(r, 8000));
   }
 
   if (allRows.length === 0) {
