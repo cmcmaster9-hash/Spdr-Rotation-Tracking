@@ -679,7 +679,17 @@ function renderRotationMap(rows){
     return `<div class="legend-item ${isHidden?'inactive':''}" onclick="toggleSector('${r.tk}')" title="Click to ${isHidden?'show':'hide'} ${r.tk}">
       <span class="legend-dot" style="background:${isHidden?'#3a3f47':r.color}"></span>${r.tk} — ${r.name}
     </div>`;
-  }).join('') + `<div class="legend-item" style="cursor:pointer;color:var(--accent);" onclick="hiddenSectors.clear(); localStorage.setItem(HIDDEN_KEY,'[]'); renderRotationMap(currentRows);">show all</div>`;
+  }).join('') + `<div class="legend-item" style="cursor:pointer;color:var(--accent);" onclick="toggleAllSectors()">${hiddenSectors.size === 0 ? 'hide all' : 'show all'}</div>`;
+}
+
+function toggleAllSectors(){
+  if(hiddenSectors.size === 0){
+    SECTORS.forEach(s => hiddenSectors.add(s.tk));
+  } else {
+    hiddenSectors.clear();
+  }
+  localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenSectors]));
+  renderRotationMap(currentRows);
 }
 
 function pctCell(v){
