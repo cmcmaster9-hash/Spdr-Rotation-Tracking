@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sector Rotation — SPDR Sector Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0C10;
+    --panel:#12151B;
+    --panel-2:#161A21;
+    --border:#20252E;
+    --text:#E8E6E1;
+    --muted:#7A828E;
+    --accent:#F5A623;
+    --accent-dim:#8A661A;
+    --gain:#34D399;
+    --gain-dim:rgba(52,211,153,0.14);
+    --loss:#F87171;
+    --loss-dim:rgba(248,113,113,0.14);
+    --flat:#7A828E;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(ellipse at top, #10131a 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding:28px 20px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+
+  /* ===== Header ===== */
+  header{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    flex-wrap:wrap;gap:16px;margin-bottom:22px;
+    border-bottom:1px solid var(--border);
+    padding-bottom:18px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;
+    color:var(--accent);text-transform:uppercase;margin-bottom:6px;
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;
+    margin:0;letter-spacing:-.01em;
+  }
+  .sub{color:var(--muted);font-size:13px;margin-top:6px;max-width:520px;line-height:1.5;}
+  .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+  .status-line{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .status-line b{color:var(--text);font-weight:600;}
+  .btnrow{display:flex;gap:8px;}
+  button{
+    font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;
+    background:var(--panel-2);color:var(--text);border:1px solid var(--border);
+    padding:8px 14px;border-radius:6px;cursor:pointer;transition:.15s;
+  }
+  button:hover{border-color:var(--accent-dim);color:var(--accent);}
+  button:disabled{opacity:.5;cursor:default;}
+  button.primary{background:var(--accent);color:#1a1204;border-color:var(--accent);}
+  button.primary:hover{background:#ffb840;color:#1a1204;}
+  .key-panel{
+    display:none;gap:8px;margin-top:10px;align-items:center;
+    background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+  }
+  .key-panel.open{display:flex;}
+  .key-panel input{
+    flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:7px 10px;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:12px;min-width:220px;
+  }
+  .key-panel a{color:var(--accent);font-size:11px;text-decoration:none;}
+  .key-panel a:hover{text-decoration:underline;}
+
+  /* ===== Banner / errors ===== */
+  .banner{
+    display:none;background:var(--loss-dim);border:1px solid rgba(248,113,113,.35);
+    color:#ffb4b4;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:18px;line-height:1.5;
+  }
+  .banner.show{display:block;}
+  .banner b{color:#fff;}
+  .empty-state{
+    text-align:center;padding:60px 20px;color:var(--muted);
+    border:1px dashed var(--border);border-radius:10px;
+  }
+  .empty-state .display{font-size:18px;color:var(--text);margin-bottom:8px;}
+
+  /* ===== Grid layout ===== */
+  .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-bottom:18px;}
+  @media(max-width:880px){.grid{grid-template-columns:1fr;}}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:18px 18px 16px;
+  }
+  .panel h2{
+    font-family:'Space Grotesk',sans-serif;font-size:15px;margin:0 0 4px;font-weight:700;
+  }
+  .panel .panel-sub{font-size:11.5px;color:var(--muted);margin-bottom:14px;line-height:1.5;}
+
+  /* ===== Rotation map ===== */
+  #rotationSvg{width:100%;height:auto;overflow:visible;}
+  .quad-label{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.08em;fill:var(--muted);}
+  .axis-label{font-family:'IBM Plex Mono',monospace;font-size:9.5px;fill:var(--muted);}
+  .rot-ticker{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;}
+  .legend-row{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+  /* ===== Movers panel ===== */
+  .breadth-row{display:flex;gap:10px;margin-bottom:16px;}
+  .breadth-card{
+    flex:1;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;text-align:center;
+  }
+  .breadth-card .num{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;}
+  .breadth-card .lbl{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+  .mover-list{list-style:none;margin:0;padding:0;}
+  .mover-list li{
+    display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;
+  }
+  .mover-list li:last-child{border-bottom:none;}
+  .arrow{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:12px;width:34px;text-align:center;border-radius:4px;padding:2px 0;}
+  .arrow.up{color:var(--gain);background:var(--gain-dim);}
+  .arrow.down{color:var(--loss);background:var(--loss-dim);}
+  .mover-name{flex:1;color:var(--text);}
+  .mover-name .tk{color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:10.5px;margin-left:6px;}
+  .mover-delta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);}
+
+  /* ===== Table ===== */
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{
+    text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;
+    color:var(--muted);text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--border);font-weight:500;
+  }
+  th:first-child,td:first-child{text-align:left;}
+  td{padding:9px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:'IBM Plex Mono',monospace;}
+  tbody tr:hover{background:var(--panel-2);}
+  .sector-name{font-family:'Inter',sans-serif;font-weight:500;color:var(--text);}
+  .sector-name .tk{color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:11px;margin-left:6px;}
+  .pct{padding:3px 7px;border-radius:5px;font-weight:600;display:inline-block;min-width:64px;}
+  .pct.pos{color:var(--gain);background:var(--gain-dim);}
+  .pct.neg{color:var(--loss);background:var(--loss-dim);}
+  .pct.zero{color:var(--muted);}
+  .spark{vertical-align:middle;}
+
+  footer{margin-top:24px;text-align:center;color:var(--muted);font-size:11px;font-family:'IBM Plex Mono',monospace;}
+  footer a{color:var(--accent);text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">SPDR Sector Tracker</div>
+      <h1>Sector Rotation</h1>
+      <div class="sub">Daily / weekly / monthly performance across the 11 SPDR sector ETFs, benchmarked against SPY — built to surface where money is rotating in and out of.</div>
+    </div>
+    <div class="header-right">
+      <div class="btnrow">
+        <button id="keyToggleBtn">Data Source</button>
+        <button id="refreshBtn" class="primary">Refresh</button>
+      </div>
+      <div class="status-line" id="statusLine">no data loaded</div>
+    </div>
+  </header>
+
+  <div class="key-panel" id="keyPanel">
+    <input type="text" id="supabaseUrlInput" placeholder="Supabase project URL (https://xxxx.supabase.co)">
+    <input type="password" id="supabaseAnonInput" placeholder="Supabase anon public key">
+    <button id="saveKeyBtn" class="primary">Save &amp; Load</button>
+    <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">Open Supabase →</a>
+  </div>
+  <div class="panel-sub" id="configHint" style="margin:-8px 0 16px 2px;display:none;">
+    Find these under your Supabase project → Settings → API. The anon key is safe to store here — it can only read, never write (enforced by row-level security). Once entered, they're saved in this browser; to make every device work with no setup, hardcode them near the top of the &lt;script&gt; block before you deploy — see the comment there.
+  </div>
+
+  <div class="banner" id="errorBanner"></div>
+
+  <div id="emptyState" class="empty-state">
+    <div class="display">No data yet</div>
+    Connect your Supabase project above to load sector data synced by the daily GitHub Action.
+  </div>
+
+  <div id="mainContent" style="display:none;">
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Rotation Map</h2>
+        <div class="panel-sub">Relative strength vs SPY (20-day) on the x-axis, momentum — the change in that strength over the last week — on the y-axis. Trails show the last two weeks of movement. A simplified read on rotation, not a formal RS-Ratio model.</div>
+        <svg id="rotationSvg" viewBox="0 0 520 400"></svg>
+        <div class="legend-row" id="legendRow"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Breadth &amp; Rank Shifts</h2>
+        <div class="panel-sub">How many sectors are participating right now, and who's climbing or falling fastest in the weekly rankings.</div>
+        <div class="breadth-row" id="breadthRow"></div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;">Climbing this week</div>
+        <ul class="mover-list" id="climbersList"></ul>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px;font-family:'IBM Plex Mono',monospace;">Falling this week</div>
+        <ul class="mover-list" id="fallersList"></ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Sector Detail</h2>
+      <div class="panel-sub">Ranked by weekly performance. Click a column header to re-sort.</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="name">Sector</th>
+              <th data-sort="d1">1D</th>
+              <th data-sort="w1">1W</th>
+              <th data-sort="m1">1M</th>
+              <th style="text-align:center;">20D Trend</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>Data synced daily via GitHub Actions + Twelve Data, served from Supabase · same data on every device</footer>
+</div>
+
+<script>
+const SECTORS = [
+  {tk:'XLC', name:'Communication Svcs'},
+  {tk:'XLY', name:'Consumer Discretionary'},
+  {tk:'XLP', name:'Consumer Staples'},
+  {tk:'XLE', name:'Energy'},
+  {tk:'XLF', name:'Financials'},
+  {tk:'XLV', name:'Health Care'},
+  {tk:'XLI', name:'Industrials'},
+  {tk:'XLB', name:'Materials'},
+  {tk:'XLRE',name:'Real Estate'},
+  {tk:'XLK', name:'Technology'},
+  {tk:'XLU', name:'Utilities'},
+];
+const BENCHMARK = 'SPY';
+const ALL_SYMBOLS = [...SECTORS.map(s=>s.tk), BENCHMARK];
+const CACHE_KEY = 'sector-rotation-cache-v1';
+const CONFIG_KEY = 'sector-rotation-supabase-config-v1';
+const SECTOR_COLORS = ['#34D399','#F5A623','#60A5FA','#F87171','#C084FC','#FBBF24','#4ADE80','#FB923C','#38BDF8','#F472B6','#A3E635'];
+
+// To make this file work with zero setup across every device, hardcode
+// your Supabase project's URL and anon (public) key here before you
+// deploy — both are safe to embed, since the anon key can only read
+// (row-level security blocks writes). Leave blank to use the in-browser
+// "Data Source" panel instead.
+const HARDCODED_SUPABASE_URL = '';
+const HARDCODED_SUPABASE_ANON_KEY = '';
+
+let sortState = {col:'w1', dir:-1};
+let lastPayload = null; // {series: {SYM: [{date, close}, ...] desc by date}, fetchedAt}
+
+// ---------- UI wiring ----------
+const $ = id => document.getElementById(id);
+$('keyToggleBtn').onclick = () => $('keyPanel').classList.toggle('open');
+$('refreshBtn').onclick = () => loadData(true);
+$('saveKeyBtn').onclick = () => {
+  const url = $('supabaseUrlInput').value.trim().replace(/\/$/, '');
+  const anon = $('supabaseAnonInput').value.trim();
+  if(!url || !anon) return;
+  localStorage.setItem(CONFIG_KEY, JSON.stringify({url, anon}));
+  $('keyPanel').classList.remove('open');
+  loadData(true);
+};
+document.querySelectorAll('th[data-sort]').forEach(th=>{
+  th.style.cursor='pointer';
+  th.onclick = () => {
+    const col = th.dataset.sort;
+    sortState.dir = (sortState.col === col) ? -sortState.dir : -1;
+    sortState.col = col;
+    if(lastPayload) render(lastPayload);
+  };
+});
+
+function showError(msg){
+  const b = $('errorBanner');
+  b.innerHTML = msg;
+  b.classList.add('show');
+}
+function clearError(){ $('errorBanner').classList.remove('show'); }
+
+function getConfig(){
+  if(HARDCODED_SUPABASE_URL && HARDCODED_SUPABASE_ANON_KEY){
+    return {url: HARDCODED_SUPABASE_URL, anon: HARDCODED_SUPABASE_ANON_KEY};
+  }
+  const raw = localStorage.getItem(CONFIG_KEY);
+  if(!raw) return null;
+  try{ return JSON.parse(raw); }catch(e){ return null; }
+}
+
+// ---------- Boot ----------
+(function init(){
+  const cfg = getConfig();
+  if(cfg && !HARDCODED_SUPABASE_URL){
+    $('supabaseUrlInput').value = cfg.url;
+    $('supabaseAnonInput').value = cfg.anon;
+  }
+  if(!cfg){
+    $('keyPanel').classList.add('open');
+    $('configHint').style.display = 'block';
+  }
+
+  const cachedRaw = localStorage.getItem(CACHE_KEY);
+  if(cachedRaw){
+    try{
+      const cached = JSON.parse(cachedRaw);
+      lastPayload = cached;
+      render(cached);
+      updateStatus(cached, 'cached');
+    }catch(e){ /* ignore bad cache */ }
+  }
+  if(cfg) loadData(false); // always get the freshest shared data on open
+})();
+
+function updateStatus(payload, mode){
+  const latestDate = payload.latestDate ? new Date(payload.latestDate + 'T12:00:00') : null;
+  const label = latestDate ? `data through ${latestDate.toLocaleDateString()}` : 'no date info';
+  $('statusLine').innerHTML = `<b>${mode==='cached'?'showing cached':'synced'}</b> · ${label}`;
+}
+
+// ---------- Fetch (reads from Supabase — written daily by the GitHub Action) ----------
+async function loadData(userTriggered){
+  const cfg = getConfig();
+  if(!cfg){
+    $('keyPanel').classList.add('open');
+    if(userTriggered) showError('Connect your Supabase project first.');
+    return;
+  }
+  clearError();
+  $('refreshBtn').disabled = true;
+  $('refreshBtn').textContent = 'Loading…';
+
+  try{
+    const url = `${cfg.url}/rest/v1/sector_daily?select=symbol,date,close&order=date.desc&limit=2000`;
+    const res = await fetch(url, {
+      headers: { 'apikey': cfg.anon, 'Authorization': `Bearer ${cfg.anon}` }
+    });
+    if(!res.ok){
+      const text = await res.text();
+      throw new Error(`Supabase error (${res.status}): ${text.slice(0,200)}`);
+    }
+    const rows = await res.json();
+    if(!Array.isArray(rows) || rows.length === 0){
+      throw new Error('No rows found yet — has the GitHub Action run at least once?');
+    }
+
+    const series = {};
+    ALL_SYMBOLS.forEach(sym => { series[sym] = []; });
+    rows.forEach(r => {
+      if(series[r.symbol]) series[r.symbol].push({date: r.date, close: parseFloat(r.close)});
+    });
+    Object.keys(series).forEach(sym => series[sym].sort((a,b)=>b.date.localeCompare(a.date)));
+
+    const missing = ALL_SYMBOLS.filter(sym => series[sym].length === 0);
+    if(missing.length){
+      throw new Error(`No data yet for: ${missing.join(', ')}`);
+    }
+
+    const latestDate = rows.reduce((max,r)=> r.date > max ? r.date : max, rows[0].date);
+    const payload = {series, fetchedAt: Date.now(), latestDate};
+    lastPayload = payload;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    render(payload);
+    updateStatus(payload, 'live');
+  }catch(err){
+    console.error(err);
+    showError(`<b>Couldn't load data.</b> ${escapeHtml(err.message || String(err))}`);
+    if(!lastPayload) $('emptyState').style.display = 'block';
+  }finally{
+    $('refreshBtn').disabled = false;
+    $('refreshBtn').textContent = 'Refresh';
+  }
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- Math helpers ----------
+function pctChange(closes, aIdx, bIdx){
+  if(closes.length <= Math.max(aIdx,bIdx)) return null;
+  const a = closes[aIdx].close, b = closes[bIdx].close;
+  if(!a || !b) return null;
+  return (a - b) / b;
+}
+// relative strength of sector vs benchmark at offset t (0=today), using 20d window
+function relStrength(sectorCloses, benchCloses, t){
+  const sr = pctChange(sectorCloses, t, t+20);
+  const br = pctChange(benchCloses, t, t+20);
+  if(sr === null || br === null) return null;
+  return sr - br;
+}
+
+// ---------- Render ----------
+function render(payload){
+  $('emptyState').style.display = 'none';
+  $('mainContent').style.display = 'block';
+  clearError();
+
+  const series = payload.series;
+  const bench = series[BENCHMARK];
+
+  const rows = SECTORS.map((s, idx) => {
+    const closes = series[s.tk];
+    const d1 = pctChange(closes, 0, 1);
+    const w1 = pctChange(closes, 0, 5);
+    const m1 = pctChange(closes, 0, 21);
+    // trail of relative-strength / momentum points, t = 9..0 (most recent last)
+    const trail = [];
+    for(let t=9; t>=0; t--){
+      const rs = relStrength(closes, bench, t);
+      const rsPrev = relStrength(closes, bench, t+5);
+      if(rs===null || rsPrev===null) continue;
+      trail.push({rs, momentum: rs - rsPrev});
+    }
+    return {tk:s.tk, name:s.name, d1, w1, m1, closes, trail, color: SECTOR_COLORS[idx % SECTOR_COLORS.length]};
+  });
+
+  renderBreadth(rows);
+  renderMovers(rows, series, bench);
+  renderRotationMap(rows);
+  renderTable(rows);
+}
+
+function renderBreadth(rows){
+  const up1d = rows.filter(r=>r.d1>0).length;
+  const up1w = rows.filter(r=>r.w1>0).length;
+  const up1m = rows.filter(r=>r.m1>0).length;
+  const cards = [
+    {n:`${up1d}/11`, l:'Up Today'},
+    {n:`${up1w}/11`, l:'Up This Week'},
+    {n:`${up1m}/11`, l:'Up This Month'},
+  ];
+  $('breadthRow').innerHTML = cards.map(c => `
+    <div class="breadth-card">
+      <div class="num" style="color:${parseInt(c.n)>=6?'var(--gain)':'var(--loss)'}">${c.n}</div>
+      <div class="lbl">${c.l}</div>
+    </div>`).join('');
+}
+
+function renderMovers(rows, series, bench){
+  // rank today by w1 desc, and rank "prior week" (5 trading days ago) by weekly change ending at t=5
+  const rankNow = [...rows].sort((a,b)=>b.w1-a.w1).map(r=>r.tk);
+  const priorWeekly = rows.map(r => ({tk:r.tk, w: pctChange(r.closes, 5, 10)}));
+  const rankPrior = [...priorWeekly].sort((a,b)=>b.w-a.w).map(r=>r.tk);
+
+  const shifts = rows.map(r => {
+    const nowIdx = rankNow.indexOf(r.tk);
+    const priorIdx = rankPrior.indexOf(r.tk);
+    return {tk:r.tk, name:r.name, delta: priorIdx - nowIdx}; // positive = climbed
+  });
+
+  const climbers = shifts.filter(s=>s.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,4);
+  const fallers = shifts.filter(s=>s.delta<0).sort((a,b)=>a.delta-b.delta).slice(0,4);
+
+  const renderList = (list, dir) => list.map(s => `
+    <li>
+      <span class="arrow ${dir}">${dir==='up'?'▲':'▼'} ${Math.abs(s.delta)}</span>
+      <span class="mover-name">${s.name}<span class="tk">${s.tk}</span></span>
+      <span class="mover-delta">rank ${dir==='up'?'+':'-'}${Math.abs(s.delta)}</span>
+    </li>`).join('') || `<li style="color:var(--muted);">No significant moves</li>`;
+
+  $('climbersList').innerHTML = renderList(climbers, 'up');
+  $('fallersList').innerHTML = renderList(fallers, 'down');
+}
+
+function renderRotationMap(rows){
+  const svg = $('rotationSvg');
+  const W=520,H=400,PAD=54;
+  const plotW = W-PAD*2, plotH = H-PAD*2;
+
+  // determine scale from all trail points
+  let allRS=[], allMom=[];
+  rows.forEach(r=>r.trail.forEach(p=>{allRS.push(p.rs); allMom.push(p.momentum);}));
+  const maxAbsRS = Math.max(0.02, ...allRS.map(Math.abs));
+  const maxAbsMom = Math.max(0.01, ...allMom.map(Math.abs));
+  const sx = v => PAD + plotW/2 + (v/maxAbsRS) * (plotW/2) * 0.92;
+  const sy = v => PAD + plotH/2 - (v/maxAbsMom) * (plotH/2) * 0.92;
+
+  let svgParts = [];
+  // quadrant background
+  svgParts.push(`<rect x="${PAD}" y="${PAD}" width="${plotW}" height="${plotH}" fill="#0d1016" rx="6"/>`);
+  // axes
+  svgParts.push(`<line x1="${PAD}" y1="${PAD+plotH/2}" x2="${PAD+plotW}" y2="${PAD+plotH/2}" stroke="#2a3038" stroke-width="1"/>`);
+  svgParts.push(`<line x1="${PAD+plotW/2}" y1="${PAD}" x2="${PAD+plotW/2}" y2="${PAD+plotH}" stroke="#2a3038" stroke-width="1"/>`);
+  // quadrant labels
+  svgParts.push(`<text class="quad-label" x="${PAD+plotW-4}" y="${PAD+14}" text-anchor="end">LEADING</text>`);
+  svgParts.push(`<text class="quad-label" x="${PAD+4}" y="${PAD+14}" text-anchor="start">IMPROVING</text>`);
+  svgParts.push(`<text class="quad-label" x="${PAD+4}" y="${PAD+plotH-6}" text-anchor="start">LAGGING</text>`);
+  svgParts.push(`<text class="quad-label" x="${PAD+plotW-4}" y="${PAD+plotH-6}" text-anchor="end">WEAKENING</text>`);
+  svgParts.push(`<text class="axis-label" x="${PAD+plotW/2}" y="${H-12}" text-anchor="middle">← weaker vs SPY · relative strength · stronger vs SPY →</text>`);
+  svgParts.push(`<text class="axis-label" x="14" y="${PAD+plotH/2}" text-anchor="middle" transform="rotate(-90,14,${PAD+plotH/2})">← losing steam · momentum · gaining steam →</text>`);
+
+  rows.forEach(r => {
+    if(r.trail.length < 2) return;
+    const pts = r.trail.map(p => [sx(p.rs), sy(p.momentum)]);
+    const pathD = pts.map((p,i)=> (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+    svgParts.push(`<path d="${pathD}" fill="none" stroke="${r.color}" stroke-width="1.6" opacity="0.55"/>`);
+    pts.forEach((p,i)=>{
+      if(i === pts.length-1) return;
+      const op = 0.15 + 0.5*(i/pts.length);
+      svgParts.push(`<circle cx="${p[0]}" cy="${p[1]}" r="2.2" fill="${r.color}" opacity="${op.toFixed(2)}"/>`);
+    });
+    const last = pts[pts.length-1];
+    svgParts.push(`<circle cx="${last[0]}" cy="${last[1]}" r="5" fill="${r.color}" stroke="#0A0C10" stroke-width="1.5"/>`);
+    const labelAnchor = last[0] > PAD+plotW-60 ? 'end' : 'start';
+    const dx = labelAnchor==='end' ? -8 : 8;
+    svgParts.push(`<text class="rot-ticker" x="${last[0]+dx}" y="${last[1]+4}" text-anchor="${labelAnchor}" fill="${r.color}">${r.tk}</text>`);
+  });
+
+  svg.innerHTML = svgParts.join('');
+
+  $('legendRow').innerHTML = rows.map(r => `
+    <div class="legend-item"><span class="legend-dot" style="background:${r.color}"></span>${r.tk} — ${r.name}</div>
+  `).join('');
+}
+
+function pctCell(v){
+  if(v === null || v === undefined) return `<span class="pct zero">—</span>`;
+  const cls = v > 0.0005 ? 'pos' : (v < -0.0005 ? 'neg' : 'zero');
+  const sign = v > 0 ? '+' : '';
+  return `<span class="pct ${cls}">${sign}${(v*100).toFixed(2)}%</span>`;
+}
+
+function sparkline(closes){
+  const pts = closes.slice(0,20).map(c=>c.close).reverse();
+  if(pts.length < 2) return '';
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const range = (max-min) || 1;
+  const w=90,h=26,pad=2;
+  const stepX = (w-pad*2)/(pts.length-1);
+  const coords = pts.map((v,i)=>{
+    const x = pad + i*stepX;
+    const y = h - pad - ((v-min)/range)*(h-pad*2);
+    return [x,y];
+  });
+  const d = coords.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const rising = pts[pts.length-1] >= pts[0];
+  const color = rising ? 'var(--gain)' : 'var(--loss)';
+  const last = coords[coords.length-1];
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="2" fill="${color}"/>
+  </svg>`;
+}
+
+function renderTable(rows){
+  const sorted = [...rows].sort((a,b) => {
+    const col = sortState.col;
+    if(col === 'name') return sortState.dir * a.name.localeCompare(b.name);
+    const av = a[col] ?? -Infinity, bv = b[col] ?? -Infinity;
+    return sortState.dir * (bv - av);
+  });
+
+  $('tableBody').innerHTML = sorted.map(r => `
+    <tr>
+      <td class="sector-name">${r.name}<span class="tk">${r.tk}</span></td>
+      <td>${pctCell(r.d1)}</td>
+      <td>${pctCell(r.w1)}</td>
+      <td>${pctCell(r.m1)}</td>
+      <td style="text-align:center;">${sparkline(r.closes)}</td>
+    </tr>
+  `).join('');
+}
+</script>
+</body>
+</html>
