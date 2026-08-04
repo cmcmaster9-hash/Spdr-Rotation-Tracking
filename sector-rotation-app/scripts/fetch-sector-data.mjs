@@ -8,6 +8,8 @@
 //
 // Run with: node scripts/fetch-sector-data.mjs
 
+import * as XLSX from 'xlsx';
+
 const SYMBOLS = ['XLC','XLY','XLP','XLE','XLF','XLV','XLI','XLB','XLRE','XLK','XLU','SPY'];
 const SECTOR_ONLY_SYMBOLS = SYMBOLS.filter(s => s !== 'SPY'); // holdings only make sense for the sector funds
 const OUTPUT_SIZE = 500; // ~2 years of trading days — cheap on credits (still 1 call per symbol), gives room for seasonality
@@ -33,43 +35,69 @@ async function fetchSymbol(symbol) {
     .sort((a, b) => b.date.localeCompare(a.date)); // newest first — quadrant math below depends on this order
 }
 
-// Pulls top holdings for a sector ETF. Twelve Data's exact response shape
-// for ETF composition isn't confirmed against a live free-tier key, so this
-// tries several plausible key names defensively. If none match, it logs the
-// raw top-level keys it DID get back so the shape can be fixed in one pass
-// by reading the Action log, rather than guessing blind.
+// Pulls top holdings for a sector ETF from State Street's own public daily
+// holdings file — free, no key, no plan gate (unlike Twelve Data's
+// composition endpoint, which turned out to require an Ultra/Enterprise
+// plan). This isn't officially documented as an API, so it's parsed
+// defensively: it scans for the header row by looking for "Name" and
+// "Weight" columns rather than assuming a fixed row/column position, and
+// logs what it actually found if that scan comes up empty — so a layout
+// change on SSGA's end shows up clearly in the Action log instead of
+// silently returning nothing.
 async function fetchComposition(symbol) {
-  const url = `https://api.twelvedata.com/etfs/world/composition?symbol=${encodeURIComponent(symbol)}&apikey=${encodeURIComponent(TWELVE_DATA_API_KEY)}`;
+  const url = `https://www.ssga.com/library-content/products/fund-data/etfs/us/holdings-daily-us-en-${symbol.toLowerCase()}.xlsx`;
   const res = await fetch(url);
-  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(`SSGA holdings file error for ${symbol}: HTTP ${res.status}`);
+  }
+  const buffer = await res.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
 
-  if (json.status === 'error') {
-    throw new Error(`Twelve Data composition error for ${symbol}: ${json.message || 'unknown error'}`);
+  // Find the header row: the first row containing both a "name"-ish and
+  // "weight"-ish column label.
+  let headerRowIdx = -1, nameCol = -1, weightCol = -1, tickerCol = -1;
+  for (let i = 0; i < Math.min(grid.length, 15); i++) {
+    const row = grid[i] || [];
+    const norm = row.map(c => (c == null ? '' : String(c).trim().toLowerCase()));
+    const nIdx = norm.findIndex(c => c === 'name');
+    const wIdx = norm.findIndex(c => c.includes('weight'));
+    if (nIdx !== -1 && wIdx !== -1) {
+      headerRowIdx = i; nameCol = nIdx; weightCol = wIdx;
+      tickerCol = norm.findIndex(c => c === 'ticker' || c === 'identifier');
+      break;
+    }
   }
 
-  // Try the likely locations for a top-holdings array.
-  const candidateArrays = [
-    json.top_holdings,
-    json.holdings,
-    json?.composition?.top_holdings,
-    json?.data?.top_holdings,
-    Array.isArray(json) ? json : null,
-  ].filter(Boolean);
-
-  const list = candidateArrays.find(a => Array.isArray(a) && a.length > 0);
-
-  if (!list) {
-    console.warn(`  ${symbol}: couldn't find a holdings array. Top-level keys in response: [${Object.keys(json).join(', ')}]`);
+  if (headerRowIdx === -1) {
+    console.warn(`  ${symbol}: couldn't find a Name/Weight header row in the SSGA file. First few rows: ${JSON.stringify(grid.slice(0,5))}`);
     return [];
   }
 
-  return list.slice(0, MAX_HOLDINGS).map((h, i) => ({
-    symbol,
-    rank: i + 1,
-    holding_symbol: h.symbol || h.ticker || h.instrument_symbol || null,
-    holding_name: h.name || h.security_name || h.holding_name || h.symbol || 'Unknown',
-    weight: parseFloat(h.weight ?? h.share ?? h.percent ?? h.percentage ?? h.allocation) || null,
-  }));
+  const holdings = [];
+  for (let i = headerRowIdx + 1; i < grid.length; i++) {
+    const row = grid[i] || [];
+    const name = row[nameCol];
+    const weightRaw = row[weightCol];
+    if (!name || weightRaw == null || weightRaw === '') continue; // end of table / blank trailer rows
+    const weight = parseFloat(weightRaw);
+    if (isNaN(weight)) continue;
+    holdings.push({
+      symbol,
+      holding_symbol: tickerCol !== -1 ? (row[tickerCol] || null) : null,
+      holding_name: String(name).trim(),
+      weight,
+    });
+  }
+
+  if (holdings.length === 0) {
+    console.warn(`  ${symbol}: header row found but no valid holding rows parsed underneath it.`);
+    return [];
+  }
+
+  holdings.sort((a, b) => b.weight - a.weight);
+  return holdings.slice(0, MAX_HOLDINGS).map((h, i) => ({ ...h, rank: i + 1 }));
 }
 
 async function upsertRows(rows) {
@@ -244,7 +272,7 @@ async function main() {
     console.error(`  Quadrant tracking failed: ${err.message}`);
   }
 
-  console.log(`Fetching holdings for ${SECTOR_ONLY_SYMBOLS.length} sector ETFs...`);
+  console.log(`Fetching holdings for ${SECTOR_ONLY_SYMBOLS.length} sector ETFs from SSGA...`);
   let holdingsOk = 0, holdingsFailed = 0;
   for (const symbol of SECTOR_ONLY_SYMBOLS) {
     try {
@@ -256,11 +284,13 @@ async function main() {
       console.error(`  ${symbol} holdings failed: ${err.message}`);
       holdingsFailed++;
     }
-    await new Promise(r => setTimeout(r, 8000));
+    // Polite pacing for SSGA's server — this isn't subject to Twelve Data's
+    // 8 req/min limit since it's a separate host, but no need to hammer it.
+    await new Promise(r => setTimeout(r, 1500));
   }
   console.log(`Holdings sync: ${holdingsOk} succeeded, ${holdingsFailed} empty/failed.`);
   if (holdingsOk === 0) {
-    console.warn('No holdings data was saved for any sector — the composition endpoint may not be available on your Twelve Data plan. Price data above was still synced fine.');
+    console.warn('No holdings data was saved for any sector — SSGA may have changed their file format or URL pattern. Check the warnings above for details. Price data above was still synced fine.');
   }
 
   console.log('Done.');
