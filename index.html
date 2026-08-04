@@ -108,7 +108,9 @@
   .axis-label{font-family:'IBM Plex Mono',monospace;font-size:9.5px;fill:var(--muted);}
   .rot-ticker{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;}
   .legend-row{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;}
-  .legend-item{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;cursor:pointer;padding:2px 6px;border-radius:4px;transition:.12s;user-select:none;}
+  .legend-item:hover{background:var(--panel-2);color:var(--text);}
+  .legend-item.inactive{opacity:.4;text-decoration:line-through;}
   .legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 
   /* ===== Movers panel ===== */
@@ -133,6 +135,48 @@
 
   /* ===== Table ===== */
   .table-wrap{overflow-x:auto;}
+  .holdings-select{
+    background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+    padding:9px 12px;border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
+    min-width:260px;cursor:pointer;
+  }
+  .holdings-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:2px;}
+  .holdings-table th{
+    text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;
+    color:var(--muted);text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--border);font-weight:500;
+  }
+  .holdings-table th:first-child,.holdings-table th:nth-child(2),.holdings-table td:first-child,.holdings-table td:nth-child(2){text-align:left;}
+  .holdings-table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .holdings-table .hname{font-family:'Inter',sans-serif;color:var(--text);}
+  .holdings-weight-bar{display:inline-block;height:5px;background:var(--accent);border-radius:3px;vertical-align:middle;margin-right:8px;}
+  .holdings-empty{
+    color:var(--muted);font-size:13px;padding:20px;text-align:center;
+    border:1px dashed var(--border);border-radius:8px;line-height:1.6;
+  }
+  .holdings-empty a{color:var(--accent);text-decoration:none;}
+  .holdings-empty a:hover{text-decoration:underline;}
+
+  .heatmap-table{border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:10.5px;}
+  .heatmap-table th{
+    padding:5px 7px;color:var(--muted);font-weight:500;text-transform:uppercase;font-size:9px;letter-spacing:.04em;
+    white-space:nowrap;
+  }
+  .heatmap-table td{
+    padding:0;text-align:center;width:44px;height:30px;position:relative;
+  }
+  .heatmap-cell{
+    width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+    border-radius:3px;font-size:10px;color:#0A0C10;font-weight:600;
+  }
+  .heatmap-row-label{
+    text-align:right !important;padding-right:8px !important;color:var(--muted);font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;font-weight:600;
+  }
+  .heatmap-month-label{color:var(--text) !important;font-weight:600;}
+  .read-label{padding:3px 8px;border-radius:5px;font-weight:600;font-size:11px;display:inline-block;}
+  .read-label.momentum{color:var(--gain);background:var(--gain-dim);}
+  .read-label.reverting{color:#60A5FA;background:rgba(96,165,250,0.14);}
+  .read-label.noclear{color:var(--muted);background:var(--panel-2);}
   table{width:100%;border-collapse:collapse;font-size:12.5px;}
   th{
     text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;
@@ -210,13 +254,45 @@
     </div>
 
     <div class="panel">
+      <h2>Recent Signals</h2>
+      <div class="panel-sub">A log of sectors crossing between rotation-map quadrants, detected by the daily sync. This is the closest thing here to an automated "something just changed" alert.</div>
+      <ul class="mover-list" id="signalsList"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Sector Correlation</h2>
+      <div class="panel-sub">How closely each sector's daily moves have tracked each other over the last 60 trading days. Darker/warmer = more correlated (they tend to move together); cooler = more independent. Low-correlation pairs are where rotation between sectors is most visible.</div>
+      <div id="correlationGrid" style="overflow-x:auto;"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Momentum vs. Mean-Reversion</h2>
+      <div class="panel-sub" id="autocorrSub">For each sector, the correlation between one non-overlapping weekly return and the next, using whatever history has synced so far. Positive = weeks tend to keep going the same direction; negative = weeks tend to reverse. "Notable" only flags values outside roughly 2 standard errors of pure noise — this is a diagnostic on this sector's own history, not a forecast.</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th style="text-align:left;">Sector</th><th>Lag-1 autocorr</th><th>Weeks (n)</th><th>Read</th></tr>
+          </thead>
+          <tbody id="autocorrBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Seasonality Calendar</h2>
+      <div class="panel-sub" id="seasonalitySub">Average historical return by calendar month, based on whatever history has been synced so far — with limited years of data this is directional, not statistically robust.</div>
+      <div id="seasonalityGrid" style="overflow-x:auto;"></div>
+    </div>
+
+    <div class="panel">
       <h2>Sector Detail</h2>
-      <div class="panel-sub">Ranked by weekly performance. Click a column header to re-sort.</div>
+      <div class="panel-sub">Ranked by weekly performance. Score (0–100) blends 1D/1W/1M performance and momentum, each ranked against today's other 10 sectors — 50 is average, not a fixed benchmark. Click a column header to re-sort.</div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
               <th data-sort="name">Sector</th>
+              <th data-sort="score">Score</th>
               <th data-sort="d1">1D</th>
               <th data-sort="w1">1W</th>
               <th data-sort="m1">1M</th>
@@ -226,6 +302,13 @@
           <tbody id="tableBody"></tbody>
         </table>
       </div>
+    </div>
+
+    <div class="panel">
+      <h2>Sector Holdings</h2>
+      <div class="panel-sub">Top constituents of each sector ETF, synced daily alongside prices.</div>
+      <select id="holdingsSelect" class="holdings-select"></select>
+      <div id="holdingsBody" style="margin-top:14px;"></div>
     </div>
 
   </div>
@@ -258,16 +341,31 @@ const SECTOR_COLORS = ['#34D399','#F5A623','#60A5FA','#F87171','#C084FC','#FBBF2
 // deploy — both are safe to embed, since the anon key can only read
 // (row-level security blocks writes). Leave blank to use the in-browser
 // "Data Source" panel instead.
-const HARDCODED_SUPABASE_URL = 'https://dkqvrqsyfsbaajtlmgvz.supabase.co';
-const HARDCODED_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrcXZycXN5ZnNiYWFqdGxtZ3Z6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NzcyODMsImV4cCI6MjEwMTM1MzI4M30.QgjQ7GLUT7fkQGRYzdzAEFX_d6LAUhgWPoWipwZlCQI';
+const HARDCODED_SUPABASE_URL = '';
+const HARDCODED_SUPABASE_ANON_KEY = '';
 
 let sortState = {col:'w1', dir:-1};
 let lastPayload = null; // {series: {SYM: [{date, close}, ...] desc by date}, fetchedAt}
+let currentRows = [];
+const HIDDEN_KEY = 'sector-rotation-hidden-v1';
+let hiddenSectors = new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'));
+
+function toggleSector(tk){
+  if(hiddenSectors.has(tk)) hiddenSectors.delete(tk);
+  else hiddenSectors.add(tk);
+  localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenSectors]));
+  if(currentRows.length) renderRotationMap(currentRows);
+}
 
 // ---------- UI wiring ----------
 const $ = id => document.getElementById(id);
 $('keyToggleBtn').onclick = () => $('keyPanel').classList.toggle('open');
-$('refreshBtn').onclick = () => loadData(true);
+$('refreshBtn').onclick = () => {
+  loadData(true);
+  const sel = $('holdingsSelect').value;
+  if(sel) loadHoldings(sel);
+  loadSignals();
+};
 $('saveKeyBtn').onclick = () => {
   const url = $('supabaseUrlInput').value.trim().replace(/\/$/, '');
   const anon = $('supabaseAnonInput').value.trim();
@@ -324,6 +422,14 @@ function getConfig(){
     }catch(e){ /* ignore bad cache */ }
   }
   if(cfg) loadData(false); // always get the freshest shared data on open
+
+  $('holdingsSelect').innerHTML = SECTORS.map(s => `<option value="${s.tk}">${s.tk} — ${s.name}</option>`).join('');
+  $('holdingsSelect').onchange = () => loadHoldings($('holdingsSelect').value);
+  if(cfg) loadHoldings(SECTORS[0].tk);
+  else $('holdingsBody').innerHTML = `<div class="holdings-empty">Connect your Supabase project above to load holdings.</div>`;
+
+  if(cfg) loadSignals();
+  else $('signalsList').innerHTML = `<li style="color:var(--muted);">Connect your Supabase project above to load signals.</li>`;
 })();
 
 function updateStatus(payload, mode){
@@ -345,7 +451,7 @@ async function loadData(userTriggered){
   $('refreshBtn').textContent = 'Loading…';
 
   try{
-    const url = `${cfg.url}/rest/v1/sector_daily?select=symbol,date,close&order=date.desc&limit=2000`;
+    const url = `${cfg.url}/rest/v1/sector_daily?select=symbol,date,close&order=date.desc&limit=8000`;
     const res = await fetch(url, {
       headers: { 'apikey': cfg.anon, 'Authorization': `Bearer ${cfg.anon}` }
     });
@@ -405,6 +511,33 @@ function relStrength(sectorCloses, benchCloses, t){
   return sr - br;
 }
 
+// Composite Rotation Score (0-100): blends 1D/1W/1M performance and rotation
+// momentum, each measured as a percentile rank *within this sector
+// cross-section* (not against a fixed threshold) — so the score always
+// reflects "strongest of today's 11", regardless of overall market direction.
+function computeScores(rows){
+  const percentileRank = (values, i) => {
+    const v = values[i];
+    if(v === null || v === undefined || isNaN(v)) return 50; // neutral if missing
+    const finite = values.filter(x => x !== null && x !== undefined && !isNaN(x));
+    if(finite.length <= 1) return 50;
+    const below = finite.filter(x => x < v).length;
+    return (below / (finite.length - 1)) * 100;
+  };
+  const d1s = rows.map(r=>r.d1);
+  const w1s = rows.map(r=>r.w1);
+  const m1s = rows.map(r=>r.m1);
+  const moms = rows.map(r => r.trail.length ? r.trail[r.trail.length-1].momentum : null);
+
+  rows.forEach((r,i) => {
+    const pD1 = percentileRank(d1s, i);
+    const pW1 = percentileRank(w1s, i);
+    const pM1 = percentileRank(m1s, i);
+    const pMom = percentileRank(moms, i);
+    r.score = pD1*0.15 + pW1*0.30 + pM1*0.30 + pMom*0.25;
+  });
+}
+
 // ---------- Render ----------
 function render(payload){
   $('emptyState').style.display = 'none';
@@ -430,8 +563,14 @@ function render(payload){
     return {tk:s.tk, name:s.name, d1, w1, m1, closes, trail, color: SECTOR_COLORS[idx % SECTOR_COLORS.length]};
   });
 
+  computeScores(rows);
+
   renderBreadth(rows);
   renderMovers(rows, series, bench);
+  renderCorrelation(rows);
+  renderAutocorrelation(rows);
+  renderSeasonality(rows);
+  currentRows = rows;
   renderRotationMap(rows);
   renderTable(rows);
 }
@@ -482,12 +621,14 @@ function renderRotationMap(rows){
   const svg = $('rotationSvg');
   const W=520,H=400,PAD=54;
   const plotW = W-PAD*2, plotH = H-PAD*2;
+  const visibleRows = rows.filter(r => !hiddenSectors.has(r.tk));
 
-  // determine scale from all trail points
+  // determine scale from visible trail points only, so hiding sectors
+  // lets the remaining ones use the full plot area
   let allRS=[], allMom=[];
-  rows.forEach(r=>r.trail.forEach(p=>{allRS.push(p.rs); allMom.push(p.momentum);}));
-  const maxAbsRS = Math.max(0.02, ...allRS.map(Math.abs));
-  const maxAbsMom = Math.max(0.01, ...allMom.map(Math.abs));
+  visibleRows.forEach(r=>r.trail.forEach(p=>{allRS.push(p.rs); allMom.push(p.momentum);}));
+  const maxAbsRS = Math.max(0.02, ...allRS.map(Math.abs), 0.001);
+  const maxAbsMom = Math.max(0.01, ...allMom.map(Math.abs), 0.001);
   const sx = v => PAD + plotW/2 + (v/maxAbsRS) * (plotW/2) * 0.92;
   const sy = v => PAD + plotH/2 - (v/maxAbsMom) * (plotH/2) * 0.92;
 
@@ -505,7 +646,11 @@ function renderRotationMap(rows){
   svgParts.push(`<text class="axis-label" x="${PAD+plotW/2}" y="${H-12}" text-anchor="middle">← weaker vs SPY · relative strength · stronger vs SPY →</text>`);
   svgParts.push(`<text class="axis-label" x="14" y="${PAD+plotH/2}" text-anchor="middle" transform="rotate(-90,14,${PAD+plotH/2})">← losing steam · momentum · gaining steam →</text>`);
 
-  rows.forEach(r => {
+  if(visibleRows.length === 0){
+    svgParts.push(`<text class="axis-label" x="${W/2}" y="${H/2}" text-anchor="middle" fill="var(--muted)">All sectors hidden — click a sector below to show it</text>`);
+  }
+
+  visibleRows.forEach(r => {
     if(r.trail.length < 2) return;
     const pts = r.trail.map(p => [sx(p.rs), sy(p.momentum)]);
     const pathD = pts.map((p,i)=> (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
@@ -524,9 +669,12 @@ function renderRotationMap(rows){
 
   svg.innerHTML = svgParts.join('');
 
-  $('legendRow').innerHTML = rows.map(r => `
-    <div class="legend-item"><span class="legend-dot" style="background:${r.color}"></span>${r.tk} — ${r.name}</div>
-  `).join('');
+  $('legendRow').innerHTML = rows.map(r => {
+    const isHidden = hiddenSectors.has(r.tk);
+    return `<div class="legend-item ${isHidden?'inactive':''}" onclick="toggleSector('${r.tk}')" title="Click to ${isHidden?'show':'hide'} ${r.tk}">
+      <span class="legend-dot" style="background:${isHidden?'#3a3f47':r.color}"></span>${r.tk} — ${r.name}
+    </div>`;
+  }).join('') + `<div class="legend-item" style="cursor:pointer;color:var(--accent);" onclick="hiddenSectors.clear(); localStorage.setItem(HIDDEN_KEY,'[]'); renderRotationMap(currentRows);">show all</div>`;
 }
 
 function pctCell(v){
@@ -569,6 +717,7 @@ function renderTable(rows){
   $('tableBody').innerHTML = sorted.map(r => `
     <tr>
       <td class="sector-name">${r.name}<span class="tk">${r.tk}</span></td>
+      <td>${scoreCell(r.score)}</td>
       <td>${pctCell(r.d1)}</td>
       <td>${pctCell(r.w1)}</td>
       <td>${pctCell(r.m1)}</td>
@@ -576,6 +725,278 @@ function renderTable(rows){
     </tr>
   `).join('');
 }
+
+function scoreCell(score){
+  if(score === null || score === undefined) return `<span class="pct zero">—</span>`;
+  const cls = score >= 60 ? 'pos' : (score <= 40 ? 'neg' : 'zero');
+  return `<span class="pct ${cls}">${Math.round(score)}</span>`;
+}
+
+// ---------- Sector holdings ----------
+async function loadHoldings(tk){
+  const cfg = getConfig();
+  const body = $('holdingsBody');
+  if(!cfg){
+    body.innerHTML = `<div class="holdings-empty">Connect your Supabase project above to load holdings.</div>`;
+    return;
+  }
+  body.innerHTML = `<div class="holdings-empty">Loading…</div>`;
+  try{
+    const url = `${cfg.url}/rest/v1/sector_holdings?symbol=eq.${encodeURIComponent(tk)}&select=rank,holding_symbol,holding_name,weight&order=rank.asc`;
+    const res = await fetch(url, { headers: { 'apikey': cfg.anon, 'Authorization': `Bearer ${cfg.anon}` } });
+    if(!res.ok) throw new Error(`Supabase error (${res.status})`);
+    const rows = await res.json();
+    renderHoldings(tk, rows);
+  }catch(err){
+    console.error(err);
+    renderHoldings(tk, []);
+  }
+}
+
+function renderHoldings(tk, rows){
+  const body = $('holdingsBody');
+  if(!Array.isArray(rows) || rows.length === 0){
+    body.innerHTML = `<div class="holdings-empty">
+      No holdings data synced for ${tk} yet — this may mean the composition endpoint isn't available on the current Twelve Data plan.<br>
+      In the meantime: <a href="https://stockanalysis.com/etf/${tk.toLowerCase()}/holdings/" target="_blank" rel="noopener">view ${tk}'s current holdings on stockanalysis.com →</a>
+    </div>`;
+    return;
+  }
+  const maxWeight = Math.max(...rows.map(r => r.weight || 0), 1);
+  body.innerHTML = `<table class="holdings-table">
+    <thead><tr><th>#</th><th>Holding</th><th>Ticker</th><th>Weight</th></tr></thead>
+    <tbody>
+      ${rows.map(r => {
+        const w = r.weight;
+        const barWidth = w ? Math.max(4, (w/maxWeight)*60) : 0;
+        return `<tr>
+          <td>${r.rank}</td>
+          <td class="hname">${escapeHtml(r.holding_name || '—')}</td>
+          <td>${escapeHtml(r.holding_symbol || '—')}</td>
+          <td>${w!=null ? `<span class="holdings-weight-bar" style="width:${barWidth}px"></span>${w.toFixed(2)}%` : '—'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ---------- Sector correlation heatmap ----------
+function dailyReturns(closes, maxN){
+  const n = Math.min(maxN, closes.length - 1);
+  const rets = [];
+  for(let i=0; i<n; i++){
+    const a = closes[i].close, b = closes[i+1].close;
+    if(a && b) rets.push((a-b)/b);
+  }
+  return rets;
+}
+
+function pearson(a, b){
+  const n = Math.min(a.length, b.length);
+  if(n < 5) return null;
+  const ax = a.slice(0,n), bx = b.slice(0,n);
+  const meanA = ax.reduce((s,v)=>s+v,0)/n;
+  const meanB = bx.reduce((s,v)=>s+v,0)/n;
+  let num=0, denA=0, denB=0;
+  for(let i=0;i<n;i++){
+    const da = ax[i]-meanA, db = bx[i]-meanB;
+    num += da*db; denA += da*da; denB += db*db;
+  }
+  if(denA===0 || denB===0) return null;
+  return num / Math.sqrt(denA*denB);
+}
+
+function corrCellStyle(v){
+  if(v === null || v === undefined) return {bg:'#161a21', text:'#4a5058'};
+  const clamp = Math.max(-1, Math.min(1, v));
+  const neutral = [26,31,39];
+  const neg = [59,130,246];   // blue — inversely related
+  const pos = [245,166,35];   // accent gold — moves together
+  const target = clamp >= 0 ? pos : neg;
+  const t = Math.abs(clamp);
+  const rgb = neutral.map((n,i) => Math.round(n + (target[i]-n)*t));
+  const brightness = (rgb[0]*299 + rgb[1]*587 + rgb[2]*114) / 1000;
+  return {bg:`rgb(${rgb.join(',')})`, text: brightness>140 ? '#0A0C10' : '#E8E6E1'};
+}
+
+function renderCorrelation(rows){
+  const returnsByTk = {};
+  rows.forEach(r => { returnsByTk[r.tk] = dailyReturns(r.closes, 60); });
+
+  const header = `<th></th>` + rows.map(r=>`<th>${r.tk}</th>`).join('');
+  const body = rows.map(rowR => {
+    const cells = rows.map(colR => {
+      const v = rowR.tk === colR.tk ? 1 : pearson(returnsByTk[rowR.tk], returnsByTk[colR.tk]);
+      const {bg, text} = corrCellStyle(v);
+      const label = v === null ? '—' : v.toFixed(2);
+      return `<td><div class="heatmap-cell" style="background:${bg};color:${text};" title="${rowR.tk} vs ${colR.tk}: ${label}">${label}</div></td>`;
+    }).join('');
+    return `<tr><th class="heatmap-row-label">${rowR.tk}</th>${cells}</tr>`;
+  }).join('');
+
+  $('correlationGrid').innerHTML = `<table class="heatmap-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+// ---------- Momentum vs. mean-reversion (lag-1 autocorrelation of weekly returns) ----------
+function weeklyReturnBlocks(closes, blockSize){
+  const asc = [...closes].reverse(); // oldest first
+  const blocks = [];
+  for(let i=0; i+blockSize < asc.length; i+=blockSize){
+    const start = asc[i].close, end = asc[i+blockSize].close;
+    if(start && end) blocks.push((end-start)/start);
+  }
+  return blocks; // chronological order, oldest first
+}
+
+function autocorrLag1(returns){
+  const n = returns.length;
+  if(n < 10) return {r:null, n};
+  const mean = returns.reduce((s,v)=>s+v,0)/n;
+  let num=0, den=0;
+  for(let i=0;i<n-1;i++) num += (returns[i]-mean)*(returns[i+1]-mean);
+  for(let i=0;i<n;i++) den += (returns[i]-mean)**2;
+  if(den === 0) return {r:null, n};
+  return {r: num/den, n: n-1}; // n-1 = number of consecutive pairs used
+}
+
+function renderAutocorrelation(rows){
+  const results = rows.map(r => {
+    const blocks = weeklyReturnBlocks(r.closes, 5);
+    const {r: corr, n} = autocorrLag1(blocks);
+    return {tk:r.tk, name:r.name, corr, n};
+  });
+
+  $('autocorrBody').innerHTML = results.map(res => {
+    if(res.corr === null || res.n < 10){
+      return `<tr>
+        <td class="sector-name">${res.name}<span class="tk">${res.tk}</span></td>
+        <td colspan="3" style="text-align:center;color:var(--muted);">not enough history yet</td>
+      </tr>`;
+    }
+    const threshold = 2/Math.sqrt(res.n);
+    let cls, label;
+    if(res.corr > threshold){ cls='momentum'; label='Momentum'; }
+    else if(res.corr < -threshold){ cls='reverting'; label='Mean-reverting'; }
+    else { cls='noclear'; label='No clear pattern'; }
+    return `<tr>
+      <td class="sector-name">${res.name}<span class="tk">${res.tk}</span></td>
+      <td>${res.corr.toFixed(2)}</td>
+      <td>${res.n}</td>
+      <td><span class="read-label ${cls}">${label}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ---------- Seasonality calendar ----------
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function seasonalMonthlyReturns(closes){
+  const asc = [...closes].reverse(); // oldest first
+  const monthEnds = [];
+  let curKey = null, curClose = null;
+  asc.forEach(c => {
+    const key = c.date.slice(0,7);
+    if(key !== curKey){
+      if(curKey !== null) monthEnds.push({key:curKey, close:curClose});
+      curKey = key;
+    }
+    curClose = c.close;
+  });
+  if(curKey !== null) monthEnds.push({key:curKey, close:curClose});
+
+  const byMonth = {};
+  for(let i=1; i<monthEnds.length; i++){
+    const prev = monthEnds[i-1], cur = monthEnds[i];
+    if(!prev.close || !cur.close) continue;
+    const ret = (cur.close - prev.close) / prev.close;
+    const monthNum = parseInt(cur.key.slice(5,7), 10);
+    (byMonth[monthNum] = byMonth[monthNum] || []).push(ret);
+  }
+
+  const avg = {}, count = {};
+  for(let m=1; m<=12; m++){
+    const arr = byMonth[m];
+    avg[m] = arr && arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : null;
+    count[m] = arr ? arr.length : 0;
+  }
+  return {avg, count, totalMonths: monthEnds.length};
+}
+
+function seasonalCellStyle(v){
+  if(v === null || v === undefined) return {bg:'#161a21', text:'#4a5058'};
+  const maxAbs = 0.06; // 6% saturates the color scale
+  const t = Math.min(1, Math.abs(v)/maxAbs);
+  const neutral = [22,26,33];
+  const target = v >= 0 ? [52,211,153] : [248,113,113];
+  const rgb = neutral.map((n,i) => Math.round(n + (target[i]-n)*t));
+  const brightness = (rgb[0]*299 + rgb[1]*587 + rgb[2]*114) / 1000;
+  return {bg:`rgb(${rgb.join(',')})`, text: brightness>140 ? '#0A0C10' : '#E8E6E1'};
+}
+
+function renderSeasonality(rows){
+  let maxMonths = 0;
+  const seasonal = rows.map(r => {
+    const s = seasonalMonthlyReturns(r.closes);
+    maxMonths = Math.max(maxMonths, s.totalMonths);
+    return {tk:r.tk, ...s};
+  });
+  const approxYears = (maxMonths/12).toFixed(1);
+  $('seasonalitySub').textContent = `Average historical return by calendar month, based on ~${approxYears} year(s) of synced history — with this little data it's directional, not statistically robust.`;
+
+  const header = `<th></th>` + MONTH_NAMES.map(m=>`<th class="heatmap-month-label">${m}</th>`).join('');
+  const body = seasonal.map(s => {
+    const cells = MONTH_NAMES.map((_, i) => {
+      const m = i+1;
+      const v = s.avg[m];
+      const {bg, text} = seasonalCellStyle(v);
+      const label = v===null ? '—' : `${(v*100).toFixed(1)}`;
+      const title = v===null ? 'no data' : `${s.tk} ${MONTH_NAMES[i]}: ${(v*100).toFixed(2)}% avg (n=${s.count[m]})`;
+      return `<td><div class="heatmap-cell" style="background:${bg};color:${text};" title="${title}">${label}</div></td>`;
+    }).join('');
+    return `<tr><th class="heatmap-row-label">${s.tk}</th>${cells}</tr>`;
+  }).join('');
+
+  $('seasonalityGrid').innerHTML = `<table class="heatmap-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+// ---------- Signals feed ----------
+async function loadSignals(){
+  const cfg = getConfig();
+  const list = $('signalsList');
+  if(!cfg){
+    list.innerHTML = `<li style="color:var(--muted);">Connect your Supabase project above to load signals.</li>`;
+    return;
+  }
+  list.innerHTML = `<li style="color:var(--muted);">Loading…</li>`;
+  try{
+    const url = `${cfg.url}/rest/v1/sector_signals?select=symbol,date,from_quadrant,to_quadrant,created_at&order=created_at.desc&limit=15`;
+    const res = await fetch(url, { headers: { 'apikey': cfg.anon, 'Authorization': `Bearer ${cfg.anon}` } });
+    if(!res.ok) throw new Error(`Supabase error (${res.status})`);
+    renderSignals(await res.json());
+  }catch(err){
+    console.error(err);
+    list.innerHTML = `<li style="color:var(--muted);">Couldn't load signals.</li>`;
+  }
+}
+
+function renderSignals(rows){
+  const list = $('signalsList');
+  if(!Array.isArray(rows) || rows.length === 0){
+    list.innerHTML = `<li style="color:var(--muted);">No quadrant crossings logged yet — these accumulate as the daily sync runs over time.</li>`;
+    return;
+  }
+  const label = {leading:'Leading', improving:'Improving', lagging:'Lagging', weakening:'Weakening'};
+  list.innerHTML = rows.map(r => {
+    const d = new Date(r.date + 'T12:00:00');
+    const dir = (r.to_quadrant==='leading' || r.to_quadrant==='improving') ? 'up' : 'down';
+    return `<li>
+      <span class="arrow ${dir}">${dir==='up'?'▲':'▼'}</span>
+      <span class="mover-name">${escapeHtml(r.symbol)}<span class="tk">${label[r.from_quadrant]||'—'} → ${label[r.to_quadrant]||escapeHtml(r.to_quadrant)}</span></span>
+      <span class="mover-delta">${d.toLocaleDateString()}</span>
+    </li>`;
+  }).join('');
+}
+
 </script>
 </body>
 </html>
