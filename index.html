@@ -91,6 +91,7 @@
 
   /* ===== Grid layout ===== */
   .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-bottom:18px;}
+  .grid-2col{grid-template-columns:1fr 1fr;}
   @media(max-width:880px){.grid{grid-template-columns:1fr;}}
 
   .panel{
@@ -253,35 +254,39 @@
       </div>
     </div>
 
-    <div class="panel">
-      <h2>Recent Signals</h2>
-      <div class="panel-sub">A log of sectors crossing between rotation-map quadrants, detected by the daily sync. This is the closest thing here to an automated "something just changed" alert.</div>
-      <ul class="mover-list" id="signalsList"></ul>
-    </div>
+    <div class="grid grid-2col">
+      <div class="panel">
+        <h2>Recent Signals</h2>
+        <div class="panel-sub">A log of sectors crossing between rotation-map quadrants, detected by the daily sync. This is the closest thing here to an automated "something just changed" alert.</div>
+        <ul class="mover-list" id="signalsList"></ul>
+      </div>
 
-    <div class="panel">
-      <h2>Sector Correlation</h2>
-      <div class="panel-sub">How closely each sector's daily moves have tracked each other over the last 60 trading days. Darker/warmer = more correlated (they tend to move together); cooler = more independent. Low-correlation pairs are where rotation between sectors is most visible.</div>
-      <div id="correlationGrid" style="overflow-x:auto;"></div>
-    </div>
-
-    <div class="panel">
-      <h2>Momentum vs. Mean-Reversion</h2>
-      <div class="panel-sub" id="autocorrSub">For each sector, the correlation between one non-overlapping weekly return and the next, using whatever history has synced so far. Positive = weeks tend to keep going the same direction; negative = weeks tend to reverse. "Notable" only flags values outside roughly 2 standard errors of pure noise — this is a diagnostic on this sector's own history, not a forecast.</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th style="text-align:left;">Sector</th><th>Lag-1 autocorr</th><th>Weeks (n)</th><th>Read</th></tr>
-          </thead>
-          <tbody id="autocorrBody"></tbody>
-        </table>
+      <div class="panel">
+        <h2>Momentum vs. Mean-Reversion</h2>
+        <div class="panel-sub" id="autocorrSub">For each sector, the correlation between one non-overlapping weekly return and the next. Positive = weeks tend to keep going the same direction; negative = weeks tend to reverse. "Notable" only flags values outside roughly 2 standard errors of pure noise — a diagnostic on this sector's own history, not a forecast.</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th style="text-align:left;">Sector</th><th>Autocorr</th><th>n</th><th>Read</th></tr>
+            </thead>
+            <tbody id="autocorrBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="panel">
-      <h2>Seasonality Calendar</h2>
-      <div class="panel-sub" id="seasonalitySub">Average historical return by calendar month, based on whatever history has been synced so far — with limited years of data this is directional, not statistically robust.</div>
-      <div id="seasonalityGrid" style="overflow-x:auto;"></div>
+    <div class="grid grid-2col">
+      <div class="panel">
+        <h2>Sector Correlation</h2>
+        <div class="panel-sub">How closely each sector's daily moves have tracked each other over the last 60 trading days. Gold = correlated; blue = independent. Low-correlation pairs are where rotation is most visible.</div>
+        <div id="correlationGrid" style="overflow-x:auto;"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Seasonality Calendar</h2>
+        <div class="panel-sub" id="seasonalitySub">Average historical return by calendar month, based on whatever history has synced so far.</div>
+        <div id="seasonalityGrid" style="overflow-x:auto;"></div>
+      </div>
     </div>
 
     <div class="panel">
@@ -341,8 +346,8 @@ const SECTOR_COLORS = ['#34D399','#F5A623','#60A5FA','#F87171','#C084FC','#FBBF2
 // deploy — both are safe to embed, since the anon key can only read
 // (row-level security blocks writes). Leave blank to use the in-browser
 // "Data Source" panel instead.
-const HARDCODED_SUPABASE_URL = 'https://dkqvrqsyfsbaajtlmgvz.supabase.co';
-const HARDCODED_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrcXZycXN5ZnNiYWFqdGxtZ3Z6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NzcyODMsImV4cCI6MjEwMTM1MzI4M30.QgjQ7GLUT7fkQGRYzdzAEFX_d6LAUhgWPoWipwZlCQI';
+const HARDCODED_SUPABASE_URL = '';
+const HARDCODED_SUPABASE_ANON_KEY = '';
 
 let sortState = {col:'w1', dir:-1};
 let lastPayload = null; // {series: {SYM: [{date, close}, ...] desc by date}, fetchedAt}
