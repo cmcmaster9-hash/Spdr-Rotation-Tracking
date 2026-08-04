@@ -1,0 +1,26 @@
+name: Fetch sector data
+
+on:
+  schedule:
+    # 21:30 UTC = 4:30pm EDT / 5:30pm EST — after market close either way.
+    # Runs weekdays only. GitHub cron is UTC and occasionally fires a few
+    # minutes late; that's fine for a once-a-day close-price sync.
+    - cron: '30 21 * * 1-5'
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run fetch script
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/fetch-sector-data.mjs
